@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "SCServo.h"
-
+#include "feetech_utils.hpp"
 #include <micro_ros_arduino.h>
 
 #include <stdio.h>
@@ -13,16 +13,8 @@
 #include <sensor_msgs/msg/joint_state.h>
 
 #define LED_PIN 13
-#define RX1 21
-#define TX1 25
 
 SMS_STS st;
-
-template <typename T>
-T remap(T x, T in_min, T in_max, T out_min, T out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
 
 rcl_node_t node;
 rclc_support_t support;
@@ -83,18 +75,37 @@ void subscription_callback(const void *msgin)
   // (condition) ? (true exec):(false exec)
   // digitalWrite(LED_PIN, (msg_led->data == 0) ? LOW : HIGH);
 
-  for (size_t i = 0; i < msg_jointstate->name.size; i++)
+  for (size_t i = 0; i < msg_jointstate->position.size; i++)
   {
     float angle = msg_jointstate->position.data[i];
-    // drive servo
-    int pulse = (int)remap(angle, -3.141f, 3.141f, 0.0f, 4095.0f);
-    st.RegWritePosEx(i, pulse, 3400, 50);
+    feetechWrite(st, i, angle);
   }
   st.RegWriteAction();
 }
 
 void setup()
 {
+  // Serial1.begin(1000000, SERIAL_8N1, RX1, TX1);
+  Serial1.begin(1000000); // serial for servos
+  st.pSerial = &Serial1;
+  delay(1000);
+  // wakeup sweep
+  float wu_angles[] = {
+      0.25f * PI_F, // neutral
+      0.35f * PI_F,
+      0.15f * PI_F,
+      0.25f * PI_F,
+  };
+  for (size_t j = 0; j < 4; j++)
+  {
+    for (size_t i = 0; i < 4; i++)
+    {
+      feetechWrite(st, i, wu_angles[j]);
+    }
+    st.RegWriteAction();
+    delay(1000);
+  }
+
   set_microros_transports();
   allocator = rcl_get_default_allocator();
 
@@ -116,13 +127,6 @@ void setup()
       "feetech_state"));
   RCCHECK(rclc_executor_init(&executor_sub, &support.context, 1, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor_sub, &subscriber, &msg_led, &subscription_callback, ON_NEW_DATA));
-
-  // Serial.begin(115200); // serial for debugging
-
-  // Serial1.begin(1000000, SERIAL_8N1, RX1, TX1);
-  Serial1.begin(1000000); // serial for servos
-  st.pSerial = &Serial1;
-  delay(1000);
 }
 
 void loop()
