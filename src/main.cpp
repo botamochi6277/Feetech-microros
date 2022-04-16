@@ -96,15 +96,8 @@ void setup()
       0.15f * PI_F,
       0.25f * PI_F,
   };
-  for (size_t j = 0; j < 4; j++)
-  {
-    for (size_t i = 0; i < 4; i++)
-    {
-      feetechWrite(st, i, wu_angles[j]);
-    }
-    st.RegWriteAction();
-    delay(1000);
-  }
+  int ids[] = {1, 2, 3, 4};
+  wakeup_sweep(st, wu_angles, 4, ids, 4);
 
   set_microros_transports();
   allocator = rcl_get_default_allocator();
@@ -132,5 +125,7 @@ void setup()
 void loop()
 {
   delay(100);
+  // heatbeat
+  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
   RCCHECK(rclc_executor_spin_some(&executor_sub, RCL_MS_TO_NS(100)));
 }

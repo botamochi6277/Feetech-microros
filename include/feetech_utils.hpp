@@ -18,4 +18,17 @@ void feetechWrite(SMS_STS &st, unsigned char id,
     st.RegWritePosEx(id, pos_cnt, speed_cnt, acc_cnt);
 }
 
+void wakeup_sweep(SMS_STS &st, float angles[], int length_angle, int ids[], int length_id, int interval = 1000)
+{
+    for (size_t j = 0; j < length_angle; j++)
+    {
+        for (size_t i = 0; i < length_id; i++)
+        {
+            feetechWrite(st, ids[i], angles[j]);
+        }
+        st.RegWriteAction();
+        delay(interval);
+    }
+}
+
 #endif
