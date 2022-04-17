@@ -1,8 +1,9 @@
 #include <Arduino.h>
+
 #include "SCServo.h"
 #include "feetech_utils.hpp"
-#include <micro_ros_arduino.h>
 
+#include <micro_ros_arduino.h>
 #include <stdio.h>
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
@@ -14,18 +15,19 @@
 
 #define LED_PIN 13
 
-SMS_STS st;
+SMS_STS st; // Feetech Bridge
 
+// node
 rcl_node_t node;
 rclc_support_t support;
 rcl_allocator_t allocator;
+
 // subscriber
 rcl_subscription_t subscriber;
-std_msgs__msg__Int32 msg_led;
-
 sensor_msgs__msg__JointState msg_jointstate;
-
 rclc_executor_t executor_sub;
+rcl_timer_t timer;
+
 #define RCCHECK(fn)              \
   {                              \
     rcl_ret_t temp_rc = fn;      \
@@ -72,23 +74,37 @@ void error_loop()
 void subscription_callback(const void *msgin)
 {
   const sensor_msgs__msg__JointState *msg_jointstate = (const sensor_msgs__msg__JointState *)msgin;
-  // (condition) ? (true exec):(false exec)
-  // digitalWrite(LED_PIN, (msg_led->data == 0) ? LOW : HIGH);
 
   for (size_t i = 0; i < msg_jointstate->position.size; i++)
   {
+    // example name: "joint_001"
+    String name = String(msg_jointstate->name.data[i].data);
     float angle = msg_jointstate->position.data[i];
-    feetechWrite(st, i, angle);
+    int loc = name.lastIndexOf('_');
+    if (loc < 0)
+    {
+      continue;
+    }
+    String s_no = name.substring(loc);
+    unsigned char id = s_no.toInt();
+    feetechWrite(st, id, angle);
   }
   st.RegWriteAction();
 }
 
 void setup()
 {
+  pinMode(LED_PIN, OUTPUT);
   // Serial1.begin(1000000, SERIAL_8N1, RX1, TX1);
   Serial1.begin(1000000); // serial for servos
   st.pSerial = &Serial1;
-  delay(1000);
+
+  // debug print before uros comm.
+  // Serial.begin(9600);
+
+  // Serial.end();
+
+  delay(1000); // waiting for servo connection
   // wakeup sweep
   float wu_angles[] = {
       0.25f * PI_F, // neutral
@@ -100,6 +116,8 @@ void setup()
   wakeup_sweep(st, wu_angles, 4, ids, 4);
 
   set_microros_transports();
+  // (todo) waiting for connection
+  delay(2000); // wait for uros connection
   allocator = rcl_get_default_allocator();
 
   // create init_options
@@ -108,24 +126,21 @@ void setup()
   // create node
   RCCHECK(rclc_node_init_default(&node, "micro_ros_feetech_node", "", &support));
 
-  // create init_options
-  RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-
   // create subscriber
-  // const char topic_name_led[] = "xiao_led_state";
   RCCHECK(rclc_subscription_init_default(
       &subscriber,
       &node,
       ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
       "feetech_state"));
+  // create executor
   RCCHECK(rclc_executor_init(&executor_sub, &support.context, 1, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&executor_sub, &subscriber, &msg_led, &subscription_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor_sub, &subscriber, &msg_jointstate, &subscription_callback, ON_NEW_DATA));
 }
 
 void loop()
 {
   delay(100);
-  // heatbeat
+  // heartbeat
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
   RCCHECK(rclc_executor_spin_some(&executor_sub, RCL_MS_TO_NS(100)));
 }
