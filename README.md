@@ -1,6 +1,6 @@
 # Feetech microros
 
-![badge](https://github.com/botamochi6277/Feetech_microros/actions/workflows/ci-platformio.yml/badge.svg)
+![badge](https://github.com/botamochi6277/Feetech-microros/actions/workflows/ci-platformio.yml/badge.svg)
 
 Seeeduino XIAO control feetech ttl servo motors with micro-ROS interface.
 The XIAO communicates with [STS3215](https://akizukidenshi.com/catalog/g/gM-16312/) using [FE-URT-1](https://akizukidenshi.com/catalog/g/gM-16295/), interface board. And the XIAO subscribes `feetech_state` topic as `sensor_msg/JointState` message.
