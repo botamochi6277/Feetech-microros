@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-// #include "SCServo.h"
-// #include "feetech_utils.hpp"
+#include "SCServo.h"
+#include "feetech_utils.hpp"
 
 #include <micro_ros_arduino.h>
 #include <stdio.h>
@@ -12,19 +12,15 @@
 
 #include <std_msgs/msg/int32.h>
 #include <sensor_msgs/msg/joint_state.h>
-// #include <std_msgs/msg/float32.h>
-// #include <std_msgs/msg/string.h>
-// #include <control_msgs/msg/joint_jog.h>
 
 #include <rosidl_runtime_c/string_functions.h>
-#include <rosidl_runtime_c/primitives_sequence_functions.h>
 #include <rosidl_runtime_c/primitives_sequence_functions.h>
 
 #define LED_HEARTBEAT_PIN 13
 #define LED_SUBSCRIPTION_PIN 0
 #define LED_ERROR_PIN 1
 
-// SMS_STS st; // Feetech Bridge
+SMS_STS feetech; // Feetech Bridge
 
 // node
 rcl_node_t node;
@@ -42,17 +38,17 @@ rcl_subscription_t subscriber;
 sensor_msgs__msg__JointState *msg_jointstate;
 rclc_executor_t executor_sub;
 
-sensor_msgs__msg__JointState *create_joint_states_message()
+sensor_msgs__msg__JointState *create_joint_states_message(size_t num_reserve = 5)
 {
   sensor_msgs__msg__JointState *msg = sensor_msgs__msg__JointState__create();
   rosidl_runtime_c__String__assign(&msg->header.frame_id, "world");
-  rosidl_runtime_c__String__Sequence__init(&msg->name, 5); // Number of join in arm
-  rosidl_runtime_c__String__assign(&msg->name.data[0], "joint1");
-  rosidl_runtime_c__String__assign(&msg->name.data[1], "joint2");
-  rosidl_runtime_c__String__assign(&msg->name.data[2], "joint3");
-  rosidl_runtime_c__String__assign(&msg->name.data[3], "joint4");
-  rosidl_runtime_c__String__assign(&msg->name.data[4], "gripper");
+  rosidl_runtime_c__String__Sequence__init(&msg->name, num_reserve); // Number of join in arm
 
+  for (size_t i = 0; i < num_reserve; i++)
+  {
+    String s = "my_awesome_joint_" + String(i);
+    rosidl_runtime_c__String__assign(&msg->name.data[i], s.c_str());
+  }
   rosidl_runtime_c__float64__Sequence__init(&msg->position, 5);
   rosidl_runtime_c__float64__Sequence__init(&msg->velocity, 5);
   rosidl_runtime_c__float64__Sequence__init(&msg->effort, 5);
@@ -107,30 +103,30 @@ void subscription_callback(const void *msgin)
   digitalWrite(LED_SUBSCRIPTION_PIN, !digitalRead(LED_SUBSCRIPTION_PIN));
   const sensor_msgs__msg__JointState *msg_jointstate = (const sensor_msgs__msg__JointState *)msgin;
 
-  // if (msg_jointstate->name.size != msg_jointstate->position.size)
-  // {
-  //   // array size is not matched
-  //   // msg_string.data.data = "array size unmatch";
-  //   return;
-  // }
+  if (msg_jointstate->name.size != msg_jointstate->position.size)
+  {
+    // array size is not matched
+    // msg_string.data.data = "array size unmatch";
+    return;
+  }
 
-  // for (size_t i = 0; i < msg_jointstate->position.size; i++)
-  // {
-  //   // example name: "joint_001"
-  //   String name = String(msg_jointstate->name.data[i].data);
-  //   float angle = msg_jointstate->position.data[i];
-  //   int loc = name.lastIndexOf('_');
-  //   if (loc < 0)
-  //   {
-  //     continue;
-  //   }
-  //   String s_no = name.substring(loc);
-  //   unsigned char id = s_no.toInt();
-  //   feetechWrite(st, id, angle);
-  //   debug_text += "id: " + String(id) + ", ";
-  //   debug_text += "position: " + String(angle, 2) + "\n";
-  // }
-  // st.RegWriteAction();
+  for (size_t i = 0; i < msg_jointstate->position.size; i++)
+  {
+    // example name: "joint_001"
+    String name = String(msg_jointstate->name.data[i].data);
+    float angle = msg_jointstate->position.data[i];
+    int loc = name.lastIndexOf('_');
+    if (loc < 0)
+    {
+      continue;
+    }
+    String s_no = name.substring(loc + 1);
+    unsigned char id = s_no.toInt();
+    feetechWrite(feetech, id, angle);
+    // debug_text += "id: " + String(id) + ", ";
+    // debug_text += "position: " + String(angle, 2) + "\n";
+  }
+  feetech.RegWriteAction();
 
   // char buff[128];
   // debug_text.toCharArray(buff, 128);
@@ -146,6 +142,20 @@ void setup()
   pinMode(LED_SUBSCRIPTION_PIN, OUTPUT);
   digitalWrite(LED_ERROR_PIN, HIGH);
   digitalWrite(LED_SUBSCRIPTION_PIN, HIGH);
+
+  Serial1.begin(1000000); // serial for servos
+  feetech.pSerial = &Serial1;
+
+  delay(1000); // waiting for servo connection
+  // wakeup sweep
+  float wu_angles[] = {
+      0.25f * PI_F, // neutral
+      0.35f * PI_F,
+      0.15f * PI_F,
+      0.25f * PI_F,
+  };
+  int ids[] = {1, 2, 3, 4};
+  wakeup_sweep(feetech, wu_angles, 4, ids, 4);
 
   // micro ros setup
   set_microros_transports();
@@ -166,10 +176,7 @@ void setup()
       ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
       "feetech_state"));
 
-  msg_jointstate = create_joint_states_message(); // assign memory
-                                                  // const int N = 32;
-                                                  // msg_jointstate.name.capacity = N;
-                                                  // msg_jointstate.name.data = (char *)
+  msg_jointstate = create_joint_states_message(16); // assign memory
 
   // create executor
   RCCHECK(rclc_executor_init(&executor_sub, &support.context, 1, &allocator));
