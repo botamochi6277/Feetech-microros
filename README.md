@@ -2,10 +2,10 @@
 
 ![badge](https://github.com/botamochi6277/Feetech_microros/actions/workflows/ci-platformio.yml/badge.svg)
 
-Test to drive feetech ttl servo motors with sweeping.
-M5Atom Lite controls [STS3215](https://akizukidenshi.com/catalog/g/gM-16312/) with [FE-URT-1](https://akizukidenshi.com/catalog/g/gM-16295/), interface board.
+Seeeduino XIAO control feetech ttl servo motors with micro-ROS interface.
+The XIAO communicates with [STS3215](https://akizukidenshi.com/catalog/g/gM-16312/) using [FE-URT-1](https://akizukidenshi.com/catalog/g/gM-16295/), interface board. And the XIAO subscribes `feetech_state` topic as `sensor_msg/JointState` message.
 
-## Usage
+## Build and Upload
 
 1-Clone this repository:
 
@@ -33,12 +33,16 @@ git clone  https://github.com/botamochi6277/Feetech-Sweep.git
 |      |     | D6 (RX) | --  | RXD (Silk) |
 |      |     | D7 (TX) | --  | TXD (Silk) |
 
-## Test
+## Communication
 
-```
-ros2 topic pub feetech_state sensor_msgs/msg/JointState '{name:[ "joint01"], position:[0]}' --once
+ros2, run agent :
+
+```zsh
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -v6
 ```
 
-```
-ros2 topic pub --once /turtle1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 2.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 1.8}}"
+ros2, publish command example:
+
+```zsh
+ros2 topic pub feetech_state sensor_msgs/msg/JointState '{name:["joint_1","joint_2"], position:[0.75,0.75]}' --once
 ```
